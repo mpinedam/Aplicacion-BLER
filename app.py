@@ -1,4 +1,5 @@
 import math
+import unicodedata
 from pathlib import Path
 
 import numpy as np
@@ -73,22 +74,28 @@ CLUSTER_COL = "cluster_k4"
 VARIABLE_LABELS = {
     "NOMBRE": "UPZ",
     "numhogares": "Hogares",
-    "area": "Area",
+    "area": "Área",
     "densidadPoblacional": "Densidad poblacional",
     "estrato_asignado": "Estrato asignado",
     "personasReal": "Personas",
-    "num_ferreterias": "Ferreterias",
+    "num_ferreterias": "Ferreterías",
     "num_tiendasPinturas": "Tiendas de pinturas",
-    "num_construcciones": "Comercios de construccion",
+    "num_construcciones": "Comercios de construcción",
     "num_industriales": "Comercios industriales",
     "num_clientes": "Clientes",
-    "primary": "Vias primarias",
-    "secondary": "Vias secundarias",
-    "tertiary": "Vias terciarias",
-    "trunk": "Vias troncales",
+    "primary": "Vías primarias",
+    "secondary": "Vías secundarias",
+    "tertiary": "Vías terciarias",
+    "trunk": "Vías troncales",
     "valResidencial": "Valor residencial",
     "valComercial": "Valor comercial",
-    "indiceaccesibilidad": "Indice de accesibilidad",
+    "indiceaccesibilidad": "Índice de accesibilidad",
+    "LOCALIDAD": "Localidad",
+    "upz_count": "Número de UPZ",
+    "ventas_2024": "Ventas reales 2024",
+    "ventas_2025": "Ventas reales 2025",
+    "crecimiento_ventas": "Crecimiento de ventas",
+    "participacion_zona_2025": "Participación zona 2025",
     "cluster_k4": "Cluster oficial",
     "cluster_k5": "Cluster k=5",
     "cluster_gmm": "Cluster GMM",
@@ -97,11 +104,113 @@ VARIABLE_LABELS = {
     "consistente": "Cluster consistente",
     "silhouette": "Silhouette",
 }
+
+CLUSTER_VARIABLES = {
+    "cluster_k4", "cluster_k5", "cluster_gmm", "cluster_hca",
+    "cluster_hca_mapped", "consistente", "silhouette"
+}
+
 BASE_POPUP_FIELDS = [
-    NAME_COL, "numhogares", "personasReal", "estrato_asignado", "num_clientes",
+    NAME_COL, "LOCALIDAD", "numhogares", "personasReal", "estrato_asignado", "num_clientes",
     "num_ferreterias", "indiceaccesibilidad", CLUSTER_COL
 ]
+LOCALIDAD_POPUP_FIELDS = [
+    "LOCALIDAD", "upz_count", "numhogares", "personasReal", "num_clientes",
+    "num_ferreterias", "ventas_2025", "ventas_2024", "crecimiento_ventas"
+]
 CLUSTER_COLORS = {0: "#0B4EA2", 1: "#E42313", 2: "#F59E0B", 3: "#22C55E"}
+
+
+def normalize_match(s):
+    if pd.isna(s):
+        return ""
+    text = str(s).strip().upper()
+    # Algunas fuentes geograficas llegan con codificacion mojibake, por ejemplo RÃO en lugar de RIO.
+    text = text.replace("Ã", "I").replace("Ã\u008d", "I")
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    return " ".join(text.replace("-", " ").split())
+
+
+def build_upz_localidad_map():
+    mapping = {
+        # 01 Usaquén
+        "PASEO DE LOS LIBERTADORES": "Usaquén", "VERBENAL": "Usaquén", "LA URIBE": "Usaquén",
+        "LOS CEDROS": "Usaquén", "SAN CRISTOBAL NORTE": "Usaquén", "TOBERIN": "Usaquén",
+        "COUNTRY CLUB": "Usaquén", "SANTA BARBARA": "Usaquén", "USAQUEN": "Usaquén",
+        # 02 Chapinero
+        "EL REFUGIO": "Chapinero", "SAN ISIDRO PATIOS": "Chapinero", "PARDO RUBIO": "Chapinero",
+        "CHICO LAGO": "Chapinero", "CHAPINERO": "Chapinero",
+        # 03 Santa Fe
+        "SAGRADO CORAZON": "Santa Fe", "LA MACARENA": "Santa Fe", "LAS NIEVES": "Santa Fe",
+        "LAS CRUCES": "Santa Fe", "LOURDES": "Santa Fe",
+        # 04 San Cristóbal
+        "SAN BLAS": "San Cristóbal", "SOSIEGO": "San Cristóbal", "20 DE JULIO": "San Cristóbal",
+        "LA GLORIA": "San Cristóbal", "LOS LIBERTADORES": "San Cristóbal", "RAMAJAL": "San Cristóbal",
+        "JUAN REY": "San Cristóbal", "SAN ISIDRO": "San Cristóbal",
+        # 05 Usme
+        "LA FLORA": "Usme", "DANUBIO": "Usme", "ALFONSO LOPEZ": "Usme",
+        "PARQUE ENTRE NUBES": "Usme", "PARQUE ENTRENUBES": "Usme", "NUEVO MUZU": "Usme",
+        "GRAN YOMASA": "Usme", "COMUNEROS": "Usme", "CIUDAD USME": "Usme", "UPR RIO TUNJUELO": "Usme",
+        # 06 Tunjuelito
+        "VENECIA": "Tunjuelito", "TUNJUELITO": "Tunjuelito",
+        # 07 Bosa
+        "APOGEO": "Bosa", "BOSA OCCIDENTAL": "Bosa", "BOSA CENTRAL": "Bosa",
+        "EL PORVENIR": "Bosa", "TINTAL SUR": "Bosa",
+        # 08 Kennedy
+        "AMERICAS": "Kennedy", "CARVAJAL": "Kennedy", "CASTILLA": "Kennedy", "KENNEDY CENTRAL": "Kennedy",
+        "TIMIZA": "Kennedy", "PATIO BONITO": "Kennedy", "TINTAL NORTE": "Kennedy", "CALANDAIMA": "Kennedy",
+        "CORABASTOS": "Kennedy", "GRAN BRITALIA": "Kennedy", "LAS MARGARITAS": "Kennedy", "BAVARIA": "Kennedy",
+        # 09 Fontibón
+        "FONTIBON": "Fontibón", "FONTIBON CENTRO": "Fontibón", "SAN PABLO": "Fontibón", "FONTIBON SAN PABLO": "Fontibón",
+        "ZONA FRANCA": "Fontibón", "CIUDAD SALITRE OCCIDENTAL": "Fontibón", "GRANJAS DE TECHO": "Fontibón",
+        "MODELIA": "Fontibón", "CAPELLANIA": "Fontibón", "AEROPUERTO EL DORADO": "Fontibón",
+        # 10 Engativá
+        "LAS FERIAS": "Engativá", "MINUTO DE DIOS": "Engativá", "BOYACA REAL": "Engativá",
+        "SANTA CECILIA": "Engativá", "JARDIN BOTANICO": "Engativá", "NORMANDIA": "Engativá",
+        "GARCES NAVAS": "Engativá", "ALAMOS": "Engativá", "ENGATIVA": "Engativá", "BOLIVIA": "Engativá",
+        # 11 Suba
+        "LA ACADEMIA": "Suba", "GUAYMARAL": "Suba", "SAN JOSE DE BAVARIA": "Suba", "BRITALIA": "Suba",
+        "EL PRADO": "Suba", "LA ALHAMBRA": "Suba", "CASABLANCA SUBA": "Suba", "CASA BLANCA SUBA": "Suba",
+        "NIZA": "Suba", "LA FLORESTA": "Suba", "SUBA CENTRO": "Suba", "SUBA": "Suba", "EL RINCON": "Suba",
+        "TIBABUYES": "Suba", "UPR ZONA NORTE": "Suba",
+        # 12 Barrios Unidos
+        "LOS ANDES": "Barrios Unidos", "DOCE DE OCTUBRE": "Barrios Unidos", "LOS ALCAZARES": "Barrios Unidos",
+        "PARQUE SALITRE": "Barrios Unidos",
+        # 13 Teusaquillo
+        "GALERIAS": "Teusaquillo", "TEUSAQUILLO": "Teusaquillo", "PARQUE SIMON BOLIVAR": "Teusaquillo",
+        "PARQUE SIMON BOLIVAR CAN": "Teusaquillo", "LA ESMERALDA": "Teusaquillo", "QUINTA PAREDES": "Teusaquillo",
+        "CIUDAD SALITRE ORIENTAL": "Teusaquillo",
+        # 14 Los Mártires
+        "LA SABANA": "Los Mártires", "SANTA ISABEL": "Los Mártires",
+        # 15 Antonio Nariño
+        "RESTREPO": "Antonio Nariño", "CIUDAD JARDIN": "Antonio Nariño",
+        # 16 Puente Aranda
+        "CIUDAD MONTES": "Puente Aranda", "MUZU": "Puente Aranda", "SAN RAFAEL": "Puente Aranda",
+        "ZONA INDUSTRIAL": "Puente Aranda", "PUENTE ARANDA": "Puente Aranda",
+        # 17 La Candelaria
+        "LA CANDELARIA": "La Candelaria",
+        # 18 Rafael Uribe Uribe
+        "SAN JOSE SUR": "Rafael Uribe Uribe", "SAN JOSE": "Rafael Uribe Uribe", "QUIROGA": "Rafael Uribe Uribe",
+        "MARCO FIDEL SUAREZ": "Rafael Uribe Uribe", "MARRUECOS": "Rafael Uribe Uribe", "DIANA TURBAY": "Rafael Uribe Uribe",
+        "MOLINOS": "Rafael Uribe Uribe", "CARACAS": "Rafael Uribe Uribe",
+        # 19 Ciudad Bolívar
+        "EL MOCHUELO": "Ciudad Bolívar", "MONTEBLANCO": "Ciudad Bolívar", "MONTE BLANCO": "Ciudad Bolívar",
+        "EL TESORO": "Ciudad Bolívar", "ISMAEL PERDOMO": "Ciudad Bolívar", "JERUSALEN": "Ciudad Bolívar", "JERUSALEM": "Ciudad Bolívar",
+        "ARBORIZADORA": "Ciudad Bolívar", "SAN FRANCISCO": "Ciudad Bolívar", "LUCERO": "Ciudad Bolívar",
+        # 20 Sumapaz
+        "UPR RIO BLANCO": "Sumapaz", "UPR RIO SUMAPAZ": "Sumapaz",
+    }
+    return {normalize_match(k): v for k, v in mapping.items()}
+
+
+UPZ_TO_LOCALIDAD = build_upz_localidad_map()
+LOCALIDAD_ALIASES = {
+    "USAQUEN": "Usaquén", "SANTAFE": "Santa Fe", "SANTA FE": "Santa Fe", "SAN CRISTOBAL": "San Cristóbal",
+    "CIUDAD BOLIVAR": "Ciudad Bolívar", "FONTIBON": "Fontibón", "ENGATIVA": "Engativá",
+    "MARTIRES": "Los Mártires", "LOS MARTIRES": "Los Mártires", "ANTONIO NARINO": "Antonio Nariño",
+    "CANDELARIA": "La Candelaria", "LA CANDELARIA": "La Candelaria",
+    "RAFAEL URIBE URIBE": "Rafael Uribe Uribe", "BARRIOS UNIDOS": "Barrios Unidos",
+}
 
 
 def normalize_name(s):
@@ -160,9 +269,11 @@ def load_data():
     reps = projected.representative_point().to_crs("EPSG:4326")
     gdf["lon"] = reps.x
     gdf["lat"] = reps.y
+    gdf["LOCALIDAD"] = gdf[NAME_COL].map(lambda x: UPZ_TO_LOCALIDAD.get(normalize_match(x), "Sin localidad"))
 
     for col in VARIABLE_LABELS:
         if col in gdf.columns and col != NAME_COL:
+            
             converted = pd.to_numeric(gdf[col], errors="coerce")
             if converted.notna().sum() > 0:
                 gdf[col] = converted
@@ -191,7 +302,66 @@ def load_ventas_bogota():
     block = block.dropna(subset=["Ventas 2025"])
     block["Localidad/Zona"] = block["Localidad/Zona"].astype(str).str.strip()
     block["Asesor"] = block["Asesor"].astype(str).str.strip()
+    block["localidad_key"] = block["Localidad/Zona"].map(normalize_match)
+    block["Localidad"] = block["localidad_key"].map(lambda k: LOCALIDAD_ALIASES.get(k, str(block.loc[block["localidad_key"] == k, "Localidad/Zona"].iloc[0]).strip().title()))
     return block.reset_index(drop=True)
+
+
+def ventas_por_localidad(ventas):
+    if ventas.empty:
+        return pd.DataFrame(columns=["LOCALIDAD", "asesores", "ventas_2024", "ventas_2025", "crecimiento_ventas", "participacion_zona_2025"])
+    df = ventas.copy()
+    df["LOCALIDAD"] = df["localidad_key"].map(lambda k: LOCALIDAD_ALIASES.get(k, df.loc[df["localidad_key"] == k, "Localidad"].iloc[0]))
+    grouped = df.groupby("LOCALIDAD", as_index=False).agg(
+        asesores=("Asesor", lambda x: ", ".join(sorted(set([str(v) for v in x if pd.notna(v)])))),
+        ventas_2024=("Ventas 2024", "sum"),
+        ventas_2025=("Ventas 2025", "sum"),
+        participacion_zona_2025=("Participacion Zona 2025", "sum"),
+    )
+    grouped["crecimiento_ventas"] = np.where(
+        grouped["ventas_2024"] > 0,
+        (grouped["ventas_2025"] - grouped["ventas_2024"]) / grouped["ventas_2024"],
+        np.nan,
+    )
+    return grouped
+
+
+def build_localidad_gdf(gdf, ventas):
+    base = gdf[gdf["LOCALIDAD"].ne("Sin localidad")].copy()
+    if base.empty:
+        return gpd.GeoDataFrame(columns=["LOCALIDAD", "geometry"], geometry="geometry", crs=gdf.crs)
+    sum_cols = [
+        "numhogares", "personasReal", "num_clientes", "num_ferreterias", "num_tiendasPinturas",
+        "num_construcciones", "num_industriales", "primary", "secondary", "tertiary", "trunk",
+        "valResidencial", "valComercial", "area"
+    ]
+    mean_cols = ["densidadPoblacional", "estrato_asignado", "indiceaccesibilidad"]
+    agg = {c: "sum" for c in sum_cols if c in base.columns}
+    agg.update({c: "mean" for c in mean_cols if c in base.columns})
+    localidad_gdf = base.dissolve(by="LOCALIDAD", aggfunc=agg).reset_index()
+    counts = base.groupby("LOCALIDAD").size().rename("upz_count").reset_index()
+    localidad_gdf = localidad_gdf.merge(counts, on="LOCALIDAD", how="left")
+    ventas_resumen = ventas_por_localidad(ventas)
+    if not ventas_resumen.empty:
+        localidad_gdf = localidad_gdf.merge(ventas_resumen, on="LOCALIDAD", how="left")
+    return localidad_gdf
+
+
+def localidad_from_click(localidad_gdf, click_info):
+    if not click_info or localidad_gdf.empty:
+        return None
+    lat = click_info.get("lat")
+    lng = click_info.get("lng")
+    if lat is None or lng is None:
+        return None
+    p = Point(lng, lat)
+    hits = localidad_gdf[localidad_gdf.geometry.contains(p)]
+    if hits.empty:
+        proj = localidad_gdf.to_crs("EPSG:3116")
+        p_proj = gpd.GeoSeries([p], crs="EPSG:4326").to_crs("EPSG:3116").iloc[0]
+        idx = proj.geometry.distance(p_proj).idxmin()
+        return localidad_gdf.loc[idx, "LOCALIDAD"]
+    return hits.iloc[0]["LOCALIDAD"]
 
 
 def format_value(v):
@@ -420,6 +590,7 @@ def cluster_detail_card(cluster_gdf, selected_cluster, profile, conclusions):
 
 gdf = load_data()
 ventas_bogota = load_ventas_bogota()
+localidad_gdf = build_localidad_gdf(gdf, ventas_bogota)
 center = (float(gdf["lat"].mean()), float(gdf["lon"].mean()))
 
 show_brand_header()
@@ -435,54 +606,136 @@ view1, view2, view3 = st.tabs(["1. Variables por UPZ", "2. Isocronas", "3. Resul
 
 with view1:
     st.subheader("Mapa de calor por variable")
-    numeric_vars = [c for c in VARIABLE_LABELS if c in gdf.columns and pd.api.types.is_numeric_dtype(gdf[c])]
-    variable = st.selectbox("Variable a visualizar", numeric_vars, format_func=pretty_col)
-    left, right = st.columns([2.3, 1], gap="large")
+    nivel = st.radio("Nivel de visualización", ["UPZ", "Localidad"], horizontal=True)
 
-    m = base_map(center, 11)
-    choropleth_data = gdf[[NAME_COL, variable, "geometry"]].dropna(subset=[variable]).copy()
-    folium.Choropleth(
-        geo_data=choropleth_data.to_json(),
-        name=pretty_col(variable),
-        data=choropleth_data,
-        columns=[NAME_COL, variable],
-        key_on=f"feature.properties.{NAME_COL}",
-        fill_color="YlOrRd",
-        fill_opacity=0.75,
-        line_opacity=0.45,
-        nan_fill_color="#f1f5f9",
-        legend_name=pretty_col(variable),
-    ).add_to(m)
-    add_upz_geojson(m, gdf, color="#ffffff", fill_opacity=0.02, name="Detalle UPZ")
-    folium.LayerControl().add_to(m)
+    if nivel == "UPZ":
+        numeric_vars = [
+            c for c in VARIABLE_LABELS
+            if c in gdf.columns
+            and c not in CLUSTER_VARIABLES
+            and pd.api.types.is_numeric_dtype(gdf[c])
+        ]
+        variable = st.selectbox("Variable a visualizar", numeric_vars, format_func=pretty_col, key="var_upz")
 
-    with left:
+        m = base_map(center, 11)
+        choropleth_data = gdf[[NAME_COL, variable, "geometry"]].dropna(subset=[variable]).copy()
+        folium.Choropleth(
+            geo_data=choropleth_data.to_json(),
+            name=pretty_col(variable),
+            data=choropleth_data,
+            columns=[NAME_COL, variable],
+            key_on=f"feature.properties.{NAME_COL}",
+            fill_color="YlOrRd",
+            fill_opacity=0.75,
+            line_opacity=0.45,
+            nan_fill_color="#f1f5f9",
+            legend_name=pretty_col(variable),
+        ).add_to(m)
+        add_upz_geojson(m, gdf, color="#ffffff", fill_opacity=0.02, name="Detalle UPZ")
+        folium.LayerControl().add_to(m)
+
         map_state = st_folium(m, height=650, use_container_width=True, returned_objects=["last_clicked"])
-
-    selected_name = upz_from_click(gdf, map_state.get("last_clicked")) if map_state else None
-    with right:
-        st.markdown("### Detalle UPZ")
+        selected_name = upz_from_click(gdf, map_state.get("last_clicked")) if map_state else None
         if not selected_name:
-            selected_name = st.selectbox("Selecciona una UPZ", sorted(gdf[NAME_COL].dropna().unique()))
+            selected_name = st.selectbox("Selecciona una UPZ para ver detalle", sorted(gdf[NAME_COL].dropna().unique()), key="select_upz_detail")
         row = gdf[gdf[NAME_COL] == selected_name].iloc[0]
-        st.markdown(f"**{selected_name}**")
-        detail_fields = [variable, "numhogares", "personasReal", "num_clientes", "estrato_asignado", "num_ferreterias", "indiceaccesibilidad", CLUSTER_COL]
-        seen = set()
-        for f in detail_fields:
-            if f in gdf.columns and f not in seen:
-                st.write(f"**{pretty_col(f)}:** {format_value(row[f])}")
-                seen.add(f)
 
-        if not ventas_bogota.empty:
-            st.markdown("---")
-            st.markdown("### Ventas reales por localidad")
-            zona = st.selectbox("Localidad / zona", ventas_bogota["Localidad/Zona"].dropna().unique())
-            vz = ventas_bogota[ventas_bogota["Localidad/Zona"] == zona].iloc[0]
-            st.write(f"**Asesor:** {vz['Asesor']}")
-            st.write(f"**Ventas 2025:** {format_money(vz['Ventas 2025'])}")
-            st.write(f"**Ventas 2024:** {format_money(vz['Ventas 2024'])}")
-            st.write(f"**Crecimiento:** {vz['Crecimiento']:.1%}" if pd.notna(vz['Crecimiento']) else "**Crecimiento:** Sin dato")
-            st.caption("Estas ventas estan por localidad/zona, no por UPZ. Para pintarlas directamente en el mapa por UPZ se necesita una tabla UPZ-localidad o un shapefile de localidades.")
+        st.markdown("### Detalle de la UPZ seleccionada")
+        d1, d2 = st.columns([1.2, 1], gap="large")
+        with d1:
+            st.markdown(f"#### {selected_name}")
+            detail_fields = ["LOCALIDAD", variable, "numhogares", "personasReal", "num_clientes", "estrato_asignado", "num_ferreterias", "indiceaccesibilidad", CLUSTER_COL]
+            seen = set()
+            for f in detail_fields:
+                if f in gdf.columns and f not in seen:
+                    st.write(f"**{pretty_col(f)}:** {format_value(row[f])}")
+                    seen.add(f)
+        with d2:
+            st.markdown("#### Ventas de la localidad")
+            loc = row.get("LOCALIDAD", None)
+            venta_loc = ventas_por_localidad(ventas_bogota)
+            if loc and not venta_loc.empty and loc in venta_loc["LOCALIDAD"].values:
+                vz = venta_loc[venta_loc["LOCALIDAD"] == loc].iloc[0]
+                st.metric("Ventas reales 2025", format_money(vz["ventas_2025"]))
+                st.write(f"**Asesor(es):** {vz['asesores']}")
+                st.write(f"**Ventas 2024:** {format_money(vz['ventas_2024'])}")
+                st.write(f"**Crecimiento:** {vz['crecimiento_ventas']:.1%}" if pd.notna(vz['crecimiento_ventas']) else "**Crecimiento:** Sin dato")
+            else:
+                st.info("No hay ventas asociadas a esta localidad en el archivo comercial.")
+
+    else:
+        localidad_vars = [
+            "ventas_2025", "ventas_2024", "crecimiento_ventas", "participacion_zona_2025",
+            "numhogares", "personasReal", "num_clientes", "num_ferreterias", "indiceaccesibilidad", "upz_count"
+        ]
+        localidad_vars = [c for c in localidad_vars if c in localidad_gdf.columns and pd.api.types.is_numeric_dtype(localidad_gdf[c])]
+        variable = st.selectbox("Variable a visualizar", localidad_vars, format_func=pretty_col, key="var_localidad")
+
+        m = base_map(center, 11)
+        choropleth_data = localidad_gdf[["LOCALIDAD", variable, "geometry"]].dropna(subset=[variable]).copy()
+        if choropleth_data.empty:
+            add_upz_geojson(m, gdf, color="#e5e7eb", fill_opacity=0.15, name="UPZ")
+            st.warning("La variable seleccionada no tiene datos suficientes para pintar el mapa.")
+        else:
+            folium.Choropleth(
+                geo_data=choropleth_data.to_json(),
+                name=pretty_col(variable),
+                data=choropleth_data,
+                columns=["LOCALIDAD", variable],
+                key_on="feature.properties.LOCALIDAD",
+                fill_color="YlGnBu",
+                fill_opacity=0.78,
+                line_opacity=0.55,
+                nan_fill_color="#f1f5f9",
+                legend_name=pretty_col(variable),
+            ).add_to(m)
+            fields = [f for f in LOCALIDAD_POPUP_FIELDS if f in localidad_gdf.columns]
+            folium.GeoJson(
+                gdf_for_folium(localidad_gdf, fields + ["geometry"]),
+                name="Detalle localidad",
+                style_function=lambda x: {"fillColor": "#ffffff", "color": "#334155", "weight": 1.0, "fillOpacity": 0.03},
+                highlight_function=lambda x: {"weight": 3, "color": "#111827", "fillOpacity": 0.15},
+                tooltip=GeoJsonTooltip(fields=fields, aliases=[pretty_col(f) for f in fields], sticky=True),
+                popup=GeoJsonPopup(fields=fields, aliases=[pretty_col(f) for f in fields], max_width=420),
+            ).add_to(m)
+        folium.LayerControl().add_to(m)
+
+        map_state = st_folium(m, height=650, use_container_width=True, returned_objects=["last_clicked"])
+        selected_loc = localidad_from_click(localidad_gdf, map_state.get("last_clicked")) if map_state else None
+        if not selected_loc:
+            selected_loc = st.selectbox("Selecciona una localidad para ver detalle", sorted(localidad_gdf["LOCALIDAD"].dropna().unique()), key="select_localidad_detail")
+        loc_row = localidad_gdf[localidad_gdf["LOCALIDAD"] == selected_loc].iloc[0]
+
+        st.markdown("### Detalle de la localidad seleccionada")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Localidad", selected_loc)
+        c2.metric("UPZ", format_value(loc_row.get("upz_count", np.nan)))
+        c3.metric("Ventas reales 2025", format_money(loc_row.get("ventas_2025", np.nan)))
+        c4.metric("Crecimiento", f"{loc_row.get('crecimiento_ventas', np.nan):.1%}" if pd.notna(loc_row.get("crecimiento_ventas", np.nan)) else "Sin dato")
+
+        d1, d2 = st.columns([1, 1], gap="large")
+        with d1:
+            st.markdown("#### Indicadores territoriales")
+            for f in ["numhogares", "personasReal", "num_clientes", "num_ferreterias", "estrato_asignado", "indiceaccesibilidad"]:
+                if f in localidad_gdf.columns:
+                    st.write(f"**{pretty_col(f)}:** {format_value(loc_row.get(f, np.nan))}")
+        with d2:
+            st.markdown("#### Información comercial")
+            st.write(f"**Asesor(es):** {loc_row.get('asesores', 'Sin dato') if pd.notna(loc_row.get('asesores', np.nan)) else 'Sin dato'}")
+            st.write(f"**Ventas reales 2024:** {format_money(loc_row.get('ventas_2024', np.nan))}")
+            st.write(f"**Ventas reales 2025:** {format_money(loc_row.get('ventas_2025', np.nan))}")
+            st.write(f"**Participación zona 2025:** {loc_row.get('participacion_zona_2025', np.nan):.2%}" if pd.notna(loc_row.get("participacion_zona_2025", np.nan)) else "**Participación zona 2025:** Sin dato")
+
+        with st.expander("Ver UPZ dentro de esta localidad"):
+            sub = gdf[gdf["LOCALIDAD"] == selected_loc].sort_values(NAME_COL)
+            st.dataframe(pretty_dataframe(sub, [NAME_COL, "numhogares", "num_clientes", CLUSTER_COL]), use_container_width=True, hide_index=True)
+
+        unmatched = ventas_por_localidad(ventas_bogota)
+        if not unmatched.empty:
+            unmatched = unmatched[~unmatched["LOCALIDAD"].isin(localidad_gdf["LOCALIDAD"])]
+            if not unmatched.empty:
+                with st.expander("Zonas comerciales del Excel que no son localidades de Bogotá"):
+                    st.dataframe(pretty_dataframe(unmatched, ["LOCALIDAD", "asesores", "ventas_2025", "ventas_2024", "crecimiento_ventas"]), use_container_width=True, hide_index=True)
 
 with view2:
     st.subheader("Isocrona dinamica por UPZ")
