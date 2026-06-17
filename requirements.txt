@@ -1,0 +1,14 @@
+streamlit
+pandas
+numpy
+geopandas
+shapely
+folium
+streamlit-folium
+branca
+pulp
+osmnx
+networkx
+scikit-learn
+matplotlib
+mapclassify
