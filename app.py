@@ -163,7 +163,9 @@ def load_data():
 
     for col in VARIABLE_LABELS:
         if col in gdf.columns and col != NAME_COL:
-            gdf[col] = pd.to_numeric(gdf[col], errors="ignore")
+            converted = pd.to_numeric(gdf[col], errors="coerce")
+            if converted.notna().sum() > 0:
+                gdf[col] = converted
 
     return gdf
 
